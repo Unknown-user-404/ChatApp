@@ -1,11 +1,11 @@
-from flask_login import LoginManager
+#from flask_login import LoginManager
 from flask import Flask, render_template, request, redirect, url_for
 from flask_socketio import SocketIO, join_room
 
 app = Flask(__name__)
 socketio = SocketIO(app)
-login_manager = LoginManager()
-login_manager.init_app(app)
+#login_manager = LoginManager()
+#login_manager.init_app(app)
 
 @app.route('/')
 def home():
