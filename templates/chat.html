@@ -5,15 +5,34 @@
         <title>Potato Chat</title>
     </head>
    <body>
+    <style>
+        * {
+            font-family: sans-serif;
+        }
+
+        .submit {
+            position: fixed;
+            margin-bottom: 0px;
+            bottom: 0px;
+            margin-left: 20px;
+            left: 20px;
+        }
+
+        .msg {
+            margin-bottom: 22px
+        }
+    </style>
     <h1>Welcome to chat room {{ room }}!</h1>
-    <div id="messages">
+    <div class="msg" id="messages">
 
     </div>
-    <form id="message_input_form">
-        <input type="text" id="message_input" placeholder="Enter your message here!">
-        <button type="submit">Send</button>
-    </form>
-   </body> 
+    <div class="submit">
+        <form id="message_input_form">
+            <input type="text" id="message_input" placeholder="Enter your message here!">
+            <button type="submit">Send</button>
+        </form>
+    </div>
+   </body>
    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.3.0/socket.io.js"></script>
    <script>
         const socket = io.connect("http://127.0.0.1:5000");

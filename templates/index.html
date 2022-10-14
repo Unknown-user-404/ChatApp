@@ -1,21 +1,41 @@
 <!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <title>Potato Chat</title>
+<html lang="en"><head>
+    <meta charset="UTF-8">
+    <title>Potato Chat</title>
+    <h3>Hi {% if current_user.is_authenticated %}{{ current_user.username }}{% else %}Guest{% endif %}</h3>
     </head>
     <body>
+        <style>
+            * {
+                text-align: center;
+                font-family: arial;
+            }
+            h1 {
+                font-family: Impact, sans-serif;
+                color: #CE5937;
+            }
+            .button:hover {
+                background-color: #CE5937;
+                color: white;
+            }
+            .button {
+                margin-top: 10px;
+                border: none;
+                border-radius: 3px;
+            }
+        </style>
+    
         <h1>Potato Chat</h1>
         <form action="/chat">
             <div>
-                <label>Enter Your username:</label>
-                <input type="text" name="username">
+                <label for="username">Username:</label><br>
+    <input type="text" name="username"><br>
             </div>
             <div>
-                <label>Enter room id:</label>
-                <input type="text" name="room">
+                <label>Room ID:</label><br>
+    <input type="text" name="room"><br>
             </div>
-            <button type="submit">Go</button>
+            <button class="button" type="submit">Go</button>
         </form>
     </body>
 </html>
