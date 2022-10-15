@@ -6,7 +6,7 @@ from pymongo.errors import DuplicateKeyError
 from dotenv import load_dotenv
 load_dotenv()
 
-from database import get_user, save_user
+from database import *
 
 app = Flask(__name__)
 app.secret_key = os.getenv('secret_key')
@@ -17,7 +17,9 @@ login_manager.init_app(app)
 
 @app.route('/')
 def home():
-    return render_template("index.html")
+    if current_user.is_authenticated:
+        rooms = get_rooms_for_user(current_user.username)
+    return render_template("index.html", rooms=rooms)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -55,22 +57,52 @@ def signup():
             message = 'User already exists!'
     return render_template('signup.html', message=message)
 
-@app.route('/logout')
+@app.route('/logout/')
 @login_required
 def logout():
     logout_user()
     return redirect(url_for('home'))
 
-@app.route('/chat')
+@app.route('/create-room/', methods=['GET', 'POST'])
 @login_required
-def chat():
-    username = request.args.get('username')
-    room = request.args.get('room')
+def create_room():
+    message = ''
+    if request.method == 'POST':
+        room_name = request.form.get('room_name')
+        usernames = [username.strip() for username in request.form.get('members').split(',')]
 
-    if username and room:
-        return render_template('chat.html', username=username, room=room)
+        if len(room_name) and len(usernames):
+            room_id = save_room(room_name, current_user.username)
+            if current_user.username in usernames:
+                usernames.remove(current_user.username)
+            add_room_members(room_id, room_name, usernames, current_user.username)
+            return redirect(url_for('view_room', room_id=room_id))
+        else:
+            message = 'Failed to create room: name or members value are empty'
+
+    return render_template('create_room.html', message=message)
+
+@app.route('/rooms/<room_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_room(room_id):
+    room = get_room(room_id)
+    if room and is_room_admin(room_id, current_user.username):
+        existing_room_members = [member['_id']['username'] for member in get_room_members(room_id)]
+        room_members_str = ",".join(existing_room_members)
+        return render_template('edit_room.html', room=room, room_members_str=room_members_str)
     else:
-        return redirect(url_for('home'))
+        return "Room not found", 404
+
+@app.route('/rooms/<room_id>/')
+@login_required
+def view_room(room_id):
+    room = get_room(room_id)
+
+    if room and is_room_member(room_id, current_user.username):
+        room_members = get_room_members(room_id)
+        return render_template('view_room.html', username=current_user.username, room=room, room_members=room_members)
+    else:
+        return "Room not found", 404
 
 @socketio.on('send_message')
 def handle_send_message_event(data):
