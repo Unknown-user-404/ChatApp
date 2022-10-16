@@ -4,39 +4,49 @@
         <meta charset="UTF-8">
         <title>Potato Chat</title>
     </head>
-   <body>
-    <style>
-        * {
-            font-family: sans-serif;
-        }
+    <body>
+        <h1>Welcome to chat room: {{ room.name }}!</h1>
+        <button type="button" id="home">Home</button>
+        {% if is_admin == True %}
+            <button type="button" id="to_editroom">Edit Room Properties</button>
+            <button type="button" id="delete_messages" onclick=delete_msg()>Delete Messages</button>
+            <script>
+                document.getElementById("to_editroom").onclick = function() {
+                    location.href = "/rooms/{{ room._id }}/edit";
+                };
 
-        .submit {
-            position: fixed;
-            margin-bottom: 0px;
-            bottom: 0px;
-            margin-left: 20px;
-            left: 20px;
-        }
-
-        .msg {
-            margin-bottom: 22px
-        }
-    </style>
-    <h1>Welcome to chat room: {{ room.name }}!</h1>
-    <div class="msg" id="messages">
-
-    </div>
-    <div class="submit">
-        <form id="message_input_form">
-            <input type="text" id="message_input" placeholder="Enter your message here!">
-            <button type="submit">Send</button>
-        </form>
-    </div>
-    <ul>
-        {% for member in room_members %}
-            <li>{{ member._id.username }}</li>
-        {% endfor %}
-    </ul>
+                function delete_msg() {
+                    let text;
+                    let amount = prompt("Please enter the amount of messages you want to delete", "1");
+                    if (amount == null || amount == "") {
+                        text = "Cancelled Prompt";
+                    } else {
+                        socket.emit('delete_messages', {
+                            room_id: "{{ room._id }}",
+                            the_amount: amount,
+                        });
+                    }
+                }
+            </script>
+        {% endif %}
+        <button type="button" id="load_older_messages_btn">Load Older Messages</button>
+        <h3>Room Members</h3>
+        <ul>
+            {% for member in room_members %}
+                <li>{{ member._id.username }}</li>
+            {% endfor %}
+        </ul>
+        <div id="messages">
+            {% for message in messages %}
+                <div><b>{{ message.sender }}&nbsp;[{{ message.created_at }}]:&nbsp;</b> {{ message.text }}</div>
+            {% endfor %}
+        </div>
+        <div class="submit">
+            <form id="message_input_form">
+                <input type="text" id="message_input" placeholder="Enter your message here!">
+                <button type="submit">Send</button>
+            </form>
+        </div>
     </body>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.3.0/socket.io.js"></script>
     <script>
@@ -66,6 +76,33 @@
 
         });
 
+        let page = 0;
+
+        document.getElementById('load_older_messages_btn').onclick = (e) => {
+            page += 1;
+            fetch("/rooms/{{ room._id }}/messages?page=" + page, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            }).then(response => {
+                response.json().then(messages => {
+                    messages.reverse().forEach(message => prepend_message(message.text, message.sender, message.created_at));
+                })
+            })
+        };
+
+        function prepend_message(message, username, created_at) {
+            const newNode = document.createElement('div');
+            newNode.innerHTML = `<b>${username}&nbsp;[${created_at}]:&nbsp;</b> ${message}`;
+            const messages_div = document.getElementById('messages');
+            messages_div.insertBefore(newNode, messages_div.firstChild);
+        }
+
+        document.getElementById("home").onclick = function() {
+            location.href = "/";
+        };
+
         window.onbeforeunload = function () {
             socket.emit('leave_room', {
                 username: "{{ username }}",
@@ -76,15 +113,26 @@
         socket.on('receive_message', function (data) {
             console.log(data);
             const newNode = document.createElement('div');
-            newNode.innerHTML = `<b>${data.username}:&nbsp<b> ${data.message}`;
+            newNode.innerHTML = `<b>${data.username}&nbsp;[${data.created_at}]:&nbsp;</b> ${data.message}`;
             document.getElementById('messages').appendChild(newNode)
-        })
+        });
 
         socket.on('join_room_announcement', function(data) {
             console.log(data);
             const newNode = document.createElement('div');
-            newNode.innerHTML = `<b>${data.username}<b> has joined the room`;
-            document.getElementById('messages').appendChild(newNode)
-        })
+            newNode.innerHTML = `<b>[SYSTEM] ${data.username}</b> has joined the room`;
+            document.getElementById('messages').appendChild(newNode);
+        });
+
+        socket.on('leave_room_announcement', function(data){
+            console.log(data);
+            const newNode = document.createElement('div');
+            newNode.innerHTML = `<b>[SYSTEM] ${data.username}</b> has left the room`;
+            document.getElementById('messages').appendChild(newNode);
+        });
+
+        socket.on('refresh_page', function() {
+            window.location.reload();
+        });
     </script>
 </html>

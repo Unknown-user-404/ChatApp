@@ -1,8 +1,10 @@
 import os
 from flask_login import LoginManager, login_required, login_user, logout_user, current_user
 from flask import Flask, render_template, request, redirect, url_for
-from flask_socketio import SocketIO, join_room
+from email_validator import validate_email, EmailNotValidError
+from flask_socketio import SocketIO, join_room, leave_room
 from pymongo.errors import DuplicateKeyError
+from bson.json_util import dumps
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -19,6 +21,8 @@ login_manager.init_app(app)
 def home():
     if current_user.is_authenticated:
         rooms = get_rooms_for_user(current_user.username)
+    else:
+        rooms = ""
     return render_template("index.html", rooms=rooms)
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -47,8 +51,14 @@ def signup():
 
     message = ''
     if request.method == 'POST':
+        is_new_account = True
         username = request.form.get('username')
         email = request.form.get('email')
+        try:
+            validation = validate_email(email, check_deliverability=is_new_account)
+        except EmailNotValidError as e:
+            message = "Email Error: " + str(e)
+            return render_template('signup.html', message=message)
         password = request.form.get('password')
         try:
             save_user(username, email, password)
@@ -89,7 +99,22 @@ def edit_room(room_id):
     if room and is_room_admin(room_id, current_user.username):
         existing_room_members = [member['_id']['username'] for member in get_room_members(room_id)]
         room_members_str = ",".join(existing_room_members)
-        return render_template('edit_room.html', room=room, room_members_str=room_members_str)
+        message = ''
+        if request.method == 'POST':
+            room_name = request.form.get('room_name')
+            room['name'] = room_name
+            update_room(room_id, room_name)
+
+            new_members = [username.strip() for username in request.form.get('members').split(',')]
+            members_to_add = list(set(new_members) - set(existing_room_members))
+            members_to_remove = list(set(existing_room_members) - set(new_members))
+            if len(members_to_add):
+                add_room_members(room_id, room_name, members_to_add, current_user.username)
+            if len(members_to_remove):
+                remove_room_members(room_id, members_to_remove)
+            message = 'Room edited successfully!'
+            room_members_str = ",".join(new_members)
+        return render_template('edit_room.html', room=room, room_members_str=room_members_str, message=message)
     else:
         return "Room not found", 404
 
@@ -100,13 +125,47 @@ def view_room(room_id):
 
     if room and is_room_member(room_id, current_user.username):
         room_members = get_room_members(room_id)
-        return render_template('view_room.html', username=current_user.username, room=room, room_members=room_members)
+        messages = get_messages(room_id)
+        if is_room_admin(room_id, current_user.username):
+            admin = True
+        else:
+            admin = False
+        return render_template('view_room.html', username=current_user.username, room=room, room_members=room_members, 
+        messages=messages, is_admin=admin)
+    else:
+        return "Room not found", 404
+
+@app.route('/rooms/<room_id>/messages/')
+@login_required
+def get_older_messages(room_id):
+    room = get_room(room_id)
+
+    if room and is_room_member(room_id, current_user.username):
+        page = int(request.args.get('page', 0))
+        messages = get_messages(room_id, page)
+        return dumps(messages)
+    else:
+        return "Room not found", 404
+
+@socketio.on('delete_messages')
+def delete_room_messages(data):
+    room = get_room(data['room_id'])
+    try:
+        amount = int(data['the_amount'])
+    except:
+        return "Bad Request", 400
+    if room and is_room_admin(data['room_id'], current_user.username):
+        delete_messages(data['room_id'], amount)
+        app.logger.info(f"{data['room_id']} has been refreshed")
+        socketio.emit('refresh_page')
     else:
         return "Room not found", 404
 
 @socketio.on('send_message')
 def handle_send_message_event(data):
     app.logger.info(f"{data['username']} has sent message to room {data['room']}: {data['message']}")
+    data['created_at'] = datetime.now().strftime("%d %b, %H:%M")
+    save_message(data['room'], data['message'], data['username'])
     socketio.emit('receive_message', data, room=data['room'])
 
 @socketio.on('join_room')
@@ -114,6 +173,12 @@ def handle_join_room_event(data):
     app.logger.info(f"{data['username']} has joined room {data['room']}")
     join_room(data['room'])
     socketio.emit('join_room_announcement', data)
+
+@socketio.on('leave_room')
+def handle_leave_room_event(data):
+    app.logger.info(f"{data['username']} has left the room {data['room']}")
+    leave_room(data['room'])
+    socketio.emit('leave_room_announcement', data)
 
 @login_manager.user_loader
 def load_user(username):

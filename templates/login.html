@@ -7,6 +7,12 @@
     <body>
         <h1>Login</h1>
         <h3>{{ message }}</h3>
+        <button id="to_signup" type="submit">Click me to signup if no account</button>
+        <script type="text/javascript">
+            document.getElementById("to_signup").onclick = function() {
+                location.href = "/signup";
+            };
+        </script>
         <form method="post" action="/login">
             <label>Username:</label>
             <input type="text" name="username">

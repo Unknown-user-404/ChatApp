@@ -6,12 +6,18 @@
     </head>
     <body>
         <h1>Edit Room</h1>
+        <button type="button" id="go_back_btn">Go Back</button>
+        <script>
+            document.getElementById("go_back_btn").onclick = function() {
+                location.href = "/rooms/{{ room._id }}/";
+            };
+        </script>
         <h3>{{ message }}</h3>
         <form method="post">
             <label>Room Name:</label>
             <input type="text" name="room_name" value="{{ room.name }}">
             <br>
-            <label>Members:</label>
+            <label>Members(split with ,):</label>
             <input type="text" name="members" value="{{ room_members_str }}">
             <br>
             <button type="submit">Confirm</button>
